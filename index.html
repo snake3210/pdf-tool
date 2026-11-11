@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 拆解與合併工作坊 | PDF Studio</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .drop-zone-active {
+      border-color: #4f46e5 !important;
+      background-color: #eef2ff !important;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .page-card {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .page-card:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">PDF 拆解與合併小工具</h1>
+          <p class="text-xs text-slate-500 hidden sm:block">瀏覽器本地處理 · 檔案不外傳 · 快速安全</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Tabs -->
+      <nav class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <button id="tabMerge" type="button" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all bg-white text-indigo-600 shadow-sm">
+          合併 PDF
+        </button>
+        <button id="tabSplit" type="button" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all text-slate-600 hover:text-slate-900">
+          拆解 / 擷取
+        </button>
+        <button id="tabOrganize" type="button" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all text-slate-600 hover:text-slate-900">
+          頁面重組與旋轉
+        </button>
+      </nav>
+
+      <!-- Sample Generator Button -->
+      <div class="flex items-center gap-2">
+        <button id="btnLoadSample" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors" title="自動產生測試用範例 PDF">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+          </svg>
+          <span>載入範例 PDF</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Toast Notification -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- ==================== TAB 1: MERGE PDF ==================== -->
+    <section id="viewMerge" class="space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-base font-semibold text-slate-900">多檔合併與指定頁碼結合</h2>
+            <p class="text-sm text-slate-500">拖曳或選擇多個 PDF 檔案，調整上下順序並可指定每個檔案要納入的頁碼範圍（例如：<code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">全部</code> 或 <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">1-3, 5</code>）。</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button id="btnClearMerge" type="button" class="px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 transition-colors hidden">
+              清空清單
+            </button>
+            <label for="inputMergeFiles" class="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              新增 PDF 檔案
+            </label>
+            <input id="inputMergeFiles" type="file" accept="application/pdf,.pdf" multiple class="hidden">
+          </div>
+        </div>
+
+        <!-- Dropzone -->
+        <div id="dropzoneMerge" class="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-indigo-400 hover:bg-slate-50/70 transition-all cursor-pointer">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+          </div>
+          <p class="text-sm font-medium text-slate-700">點擊此處選擇檔案，或將多個 PDF 拖曳至此</p>
+          <p class="text-xs text-slate-400 mt-1">支援同時上傳多個 PDF 文件，也可點擊右上角「載入範例 PDF」快速體驗</p>
+        </div>
+
+        <!-- File List -->
+        <div id="mergeListContainer" class="mt-6 hidden space-y-4">
+          <div class="flex items-center justify-between text-xs font-medium text-slate-500 px-2">
+            <span id="mergeSummaryText">已選擇 0 個檔案</span>
+            <span>可使用上下箭頭調整合併順序</span>
+          </div>
+
+          <div id="mergeFileList" class="space-y-2.5 max-h-96 overflow-y-auto custom-scrollbar pr-1"></div>
+
+          <!-- Merge Action Bar -->
+          <div class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-1 max-w-md">
+              <label for="mergeOutputName" class="text-xs font-medium text-slate-600 shrink-0">輸出檔名：</label>
+              <div class="relative flex-1">
+                <input id="mergeOutputName" type="text" value="merged_document" class="w-full pl-3 pr-12 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">.pdf</span>
+              </div>
+            </div>
+
+            <button id="btnExecuteMerge" type="button" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              <span>合併並下載 PDF</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: SPLIT PDF ==================== -->
+    <section id="viewSplit" class="space-y-6 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-base font-semibold text-slate-900">拆解與擷取 PDF 頁面</h2>
+            <p class="text-sm text-slate-500">支援點選頁面縮圖擷取、自訂頁碼區間、固定每 N 頁分割，或將每一頁拆成獨立 PDF（自動打包為 ZIP 或個別下載）。</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <label for="inputSplitFile" class="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+              </svg>
+              選擇要拆解的 PDF
+            </label>
+            <input id="inputSplitFile" type="file" accept="application/pdf,.pdf" class="hidden">
+          </div>
+        </div>
+
+        <!-- Split Dropzone (shown when no file loaded) -->
+        <div id="dropzoneSplit" class="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-indigo-400 hover:bg-slate-50/70 transition-all cursor-pointer">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z"></path>
+            </svg>
+          </div>
+          <p class="text-sm font-medium text-slate-700">點擊或拖曳單一 PDF 檔案至此進行拆解</p>
+          <p class="text-xs text-slate-400 mt-1">載入後可即時預覽每一頁縮圖並自由勾選要拆出的頁面</p>
+        </div>
+
+        <!-- Split Workspace -->
+        <div id="splitWorkspace" class="hidden space-y-6 mt-4">
+          <!-- Loaded File Info Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">PDF</div>
+              <div>
+                <p id="splitFileName" class="text-sm font-semibold text-slate-800">document.pdf</p>
+                <p id="splitFileMeta" class="text-xs text-slate-500">共 0 頁</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnSplitSelectAll" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700">全選</button>
+              <button id="btnSplitSelectOdd" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700">奇數頁</button>
+              <button id="btnSplitSelectEven" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700">偶數頁</button>
+              <button id="btnSplitSelectNone" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700">取消全選</button>
+            </div>
+          </div>
+
+          <!-- Split Configuration Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Controls -->
+            <div class="lg:col-span-1 space-y-4 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 h-fit">
+              <h3 class="text-sm font-semibold text-slate-800">拆解模式設定</h3>
+
+              <div class="space-y-2.5">
+                <label class="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-indigo-300 transition-colors">
+                  <input type="radio" name="splitMode" value="extract_single" checked class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                  <div class="text-xs">
+                    <div class="font-semibold text-slate-800">擷取選取頁面為單一 PDF</div>
+                    <div class="text-slate-500 mt-0.5">將下方勾選或輸入的頁碼合併匯出成一份新 PDF</div>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-indigo-300 transition-colors">
+                  <input type="radio" name="splitMode" value="ranges_zip" class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                  <div class="text-xs">
+                    <div class="font-semibold text-slate-800">依區間拆分為多個獨立 PDF</div>
+                    <div class="text-slate-500 mt-0.5">例如輸入 <code class="bg-slate-100 px-1 rounded">1-2, 3-5, 6</code> 會拆成 3 個 PDF 並打包 ZIP</div>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer hover:border-indigo-300 transition-colors">
+                  <input type="radio" name="splitMode" value="every_n" class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                  <div class="text-xs">
+                    <div class="font-semibold text-slate-800">固定每 N 頁拆分一份</div>
+                    <div class="text-slate-500 mt-0.5">每滿指定頁數自動切分為獨立檔案（可設為每 1 頁一檔）</div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Range Input Box -->
+              <div id="splitRangeInputBox" class="space-y-1.5 pt-2">
+                <label for="splitRangeInput" class="block text-xs font-medium text-slate-700">頁碼範圍（與右側縮圖同步）</label>
+                <input id="splitRangeInput" type="text" placeholder="例如：1-3, 5, 7-9" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <p class="text-[11px] text-slate-500">以逗號分隔區間，點擊右側頁面縮圖也會自動更新此欄位。</p>
+              </div>
+
+              <!-- Every N Input Box -->
+              <div id="splitEveryNBox" class="space-y-1.5 pt-2 hidden">
+                <label for="splitEveryNInput" class="block text-xs font-medium text-slate-700">每幾頁拆成一個檔案？</label>
+                <div class="flex items-center gap-2">
+                  <input id="splitEveryNInput" type="number" min="1" value="1" class="w-24 px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <span class="text-xs text-slate-600">頁 / 檔</span>
+                </div>
+              </div>
+
+              <!-- Output Name -->
+              <div class="space-y-1.5 pt-2 border-t border-slate-200">
+                <label for="splitOutputName" class="block text-xs font-medium text-slate-700">輸出檔名 / 前綴：</label>
+                <input id="splitOutputName" type="text" value="split_output" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+
+              <button id="btnExecuteSplit" type="button" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                <span>執行拆解並下載</span>
+              </button>
+            </div>
+
+            <!-- Right Page Thumbnails -->
+            <div class="lg:col-span-2">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold text-slate-700">點擊縮圖勾選 / 取消勾選頁面</span>
+                <span id="splitSelectedCountBadge" class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700">已選取 0 頁</span>
+              </div>
+              <div id="splitThumbnailsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[520px] overflow-y-auto custom-scrollbar p-1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: ORGANIZE & ROTATE ==================== -->
+    <section id="viewOrganize" class="space-y-6 hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-base font-semibold text-slate-900">視覺化頁面重組、旋轉與刪除</h2>
+            <p class="text-sm text-slate-500">自由調整單一或多個 PDF 的頁面順序、單頁旋轉 90°、複製或移除不要的頁面，完成後一鍵輸出全新 PDF。</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button id="btnClearOrganize" type="button" class="px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 transition-colors hidden">
+              清空所有頁面
+            </button>
+            <label for="inputOrganizeFiles" class="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              加入 PDF 頁面
+            </label>
+            <input id="inputOrganizeFiles" type="file" accept="application/pdf,.pdf" multiple class="hidden">
+          </div>
+        </div>
+
+        <!-- Organize Empty State -->
+        <div id="dropzoneOrganize" class="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-indigo-400 hover:bg-slate-50/70 transition-all cursor-pointer">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+            </svg>
+          </div>
+          <p class="text-sm font-medium text-slate-700">點擊或拖曳 PDF 檔案至此展開所有頁面縮圖</p>
+          <p class="text-xs text-slate-400 mt-1">可混合多個 PDF 的頁面進行排序、旋轉或刪減</p>
+        </div>
+
+        <!-- Organize Workspace -->
+        <div id="organizeWorkspace" class="hidden space-y-5 mt-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+            <span id="organizeMetaText" class="text-xs font-medium text-slate-600">目前共 0 頁</span>
+            <div class="flex items-center gap-2">
+              <button id="btnRotateAllLeft" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1">
+                <span>↺ 全部左轉 90°</span>
+              </button>
+              <button id="btnRotateAllRight" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1">
+                <span>↻ 全部右轉 90°</span>
+              </button>
+              <button id="btnReverseOrder" type="button" class="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700">
+                ⇅ 反轉順序
+              </button>
+            </div>
+          </div>
+
+          <div id="organizeGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-[540px] overflow-y-auto custom-scrollbar p-1"></div>
+
+          <div class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-1 max-w-md">
+              <label for="organizeOutputName" class="text-xs font-medium text-slate-600 shrink-0">輸出檔名：</label>
+              <div class="relative flex-1">
+                <input id="organizeOutputName" type="text" value="organized_document" class="w-full pl-3 pr-12 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">.pdf</span>
+              </div>
+            </div>
+
+            <button id="btnExecuteOrganize" type="button" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              <span>匯出重組後的 PDF</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Configure PDF.js worker
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // ==================== STATE ====================
+    let activeTab = 'merge'; // 'merge' | 'split' | 'organize'
+    let mergeFiles = []; // [{ id, name, size, pageCount, arrayBuffer, rangeStr }]
+    let splitState = {
+      file: null, // { name, size, pageCount, arrayBuffer }
+      selectedPages: new Set(), // 1-based page numbers
+      thumbnails: [] // dataURL per page
+    };
+    let organizePages = []; // [{ uid, sourceName, sourceBuffer, pageIndex (0-based), rotation (0,90,180,270), thumbUrl }]
+
+    // ==================== UTILITIES ====================
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-800';
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-xl shadow-lg text-xs font-medium flex items-center justify-between gap-3 pointer-events-auto transition-all duration-300`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    // Parse range string like "1-3, 5, 8-10" into array of 0-based page indices
+    function parsePageRanges(rangeStr, maxPages) {
+      const trimmed = (rangeStr || '').trim();
+      if (!trimmed || trimmed === '全部' || trimmed.toLowerCase() === 'all') {
+        return Array.from({ length: maxPages }, (_, i) => i);
+      }
+      const indices = [];
+      const parts = trimmed.split(',');
+      for (const rawPart of parts) {
+        const part = rawPart.trim();
+        if (!part) continue;
+        if (part.includes('-')) {
+          const [startStr, endStr] = part.split('-').map(s => s.trim());
+          let start = parseInt(startStr, 10);
+          let end = parseInt(endStr, 10);
+          if (isNaN(start) || isNaN(end)) continue;
+          start = Math.max(1, Math.min(maxPages, start));
+          end = Math.max(1, Math.min(maxPages, end));
+          const step = start <= end ? 1 : -1;
+          for (let p = start; step > 0 ? p <= end : p >= end; p += step) {
+            indices.push(p - 1);
+          }
+        } else {
+          const num = parseInt(part, 10);
+          if (!isNaN(num) && num >= 1 && num <= maxPages) {
+            indices.push(num - 1);
+          }
+        }
+      }
+      return indices;
+    }
+
+    // Convert Set of 1-based numbers to compact range string "1-3, 5"
+    function setToRangeString(pageSet) {
+      const sorted = Array.from(pageSet).sort((a, b) => a - b);
+      if (sorted.length === 0) return '';
+      const ranges = [];
+      let start = sorted[0];
+      let prev = sorted[0];
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] === prev + 1) {
+          prev = sorted[i];
+        } else {
+          ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+          start = sorted[i];
+          prev = sorted[i];
+        }
+      }
+      ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+      return ranges.join(', ');
+    }
+
+    // Render page thumbnail using pdf.js
+    async function renderPdfThumbnails(arrayBuffer, scale = 0.35) {
+      const thumbs = [];
+      try {
+        const copyData = new Uint8Array(arrayBuffer.slice(0));
+        const loadingTask = window.pdfjsLib.getDocument({ data: copyData });
+        const pdf = await loadingTask.promise;
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          thumbs.push(canvas.toDataURL('image/png'));
+        }
+      } catch (err) {
+        console.warn('Thumbnail fallback used:', err);
+      }
+      return thumbs;
+    }
+
+    // ==================== TAB NAVIGATION ====================
+    function switchTab(tab) {
+      activeTab = tab;
+      const tabs = {
+        merge: { btn: document.getElementById('tabMerge'), view: document.getElementById('viewMerge') },
+        split: { btn: document.getElementById('tabSplit'), view: document.getElementById('viewSplit') },
+        organize: { btn: document.getElementById('tabOrganize'), view: document.getElementById('viewOrganize') }
+      };
+      Object.keys(tabs).forEach(k => {
+        if (k === tab) {
+          tabs[k].btn.className = 'px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all bg-white text-indigo-600 shadow-sm';
+          tabs[k].view.classList.remove('hidden');
+        } else {
+          tabs[k].btn.className = 'px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all text-slate-600 hover:text-slate-900';
+          tabs[k].view.classList.add('hidden');
+        }
+      });
+    }
+
+    document.getElementById('tabMerge').addEventListener('click', () => switchTab('merge'));
+    document.getElementById('tabSplit').addEventListener('click', () => switchTab('split'));
+    document.getElementById('tabOrganize').addEventListener('click', () => switchTab('organize'));
+
+    // ==================== TAB 1: MERGE LOGIC ====================
+    async function addFilesToMerge(fileList) {
+      let added = 0;
+      for (const file of fileList) {
+        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+          showToast(`略過非 PDF 檔案：${file.name}`, 'error');
+          continue;
+        }
+        try {
+          const buffer = await file.arrayBuffer();
+          const pdfDoc = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: true });
+          const pageCount = pdfDoc.getPageCount();
+          mergeFiles.push({
+            id: 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            name: file.name,
+            size: file.size,
+            pageCount,
+            arrayBuffer: buffer,
+            rangeStr: `1-${pageCount}`
+          });
+          added++;
+        } catch (err) {
+          showToast(`無法讀取 ${file.name}，請確認檔案未受損或加密`, 'error');
+        }
+      }
+      if (added > 0) {
+        renderMergeList();
+        showToast(`成功載入 ${added} 個 PDF 檔案`, 'success');
+      }
+    }
+
+    function renderMergeList() {
+      const container = document.getElementById('mergeListContainer');
+      const listEl = document.getElementById('mergeFileList');
+      const clearBtn = document.getElementById('btnClearMerge');
+      const summaryEl = document.getElementById('mergeSummaryText');
+
+      if (mergeFiles.length === 0) {
+        container.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      clearBtn.classList.remove('hidden');
+
+      const totalPages = mergeFiles.reduce((acc, f) => acc + parsePageRanges(f.rangeStr, f.pageCount).length, 0);
+      summaryEl.textContent = `已選擇 ${mergeFiles.length} 個檔案 · 預計合併共 ${totalPages} 頁`;
+
+      listEl.innerHTML = '';
+      mergeFiles.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:shadow-sm transition-all';
+        row.innerHTML = `
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center shrink-0">${index + 1}</span>
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-slate-800 truncate">${item.name}</p>
+              <p class="text-xs text-slate-500">共 ${item.pageCount} 頁 · ${formatBytes(item.size)}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-slate-500">納入頁碼:</span>
+              <input type="text" data-id="${item.id}" value="${item.rangeStr}" placeholder="1-${item.pageCount}" class="merge-range-input w-28 px-2.5 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+            </div>
+            <div class="flex items-center border border-slate-200 rounded-lg bg-white overflow-hidden">
+              <button type="button" data-action="up" data-index="${index}" class="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30" ${index === 0 ? 'disabled' : ''} title="上移">↑</button>
+              <button type="button" data-action="down" data-index="${index}" class="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-30" ${index === mergeFiles.length - 1 ? 'disabled' : ''} title="下移">↓</button>
+            </div>
+            <button type="button" data-action="remove" data-index="${index}" class="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors" title="移除檔案">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      // Attach listeners for range input changes and buttons
+      listEl.querySelectorAll('.merge-range-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const targetId = e.target.getAttribute('data-id');
+          const fileObj = mergeFiles.find(f => f.id === targetId);
+          if (fileObj) {
+            fileObj.rangeStr = e.target.value;
+            const total = mergeFiles.reduce((acc, f) => acc + parsePageRanges(f.rangeStr, f.pageCount).length, 0);
+            summaryEl.textContent = `已選擇 ${mergeFiles.length} 個檔案 · 預計合併共 ${total} 頁`;
+          }
+        });
+      });
+
+      listEl.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const action = btn.getAttribute('data-action');
+          const idx = parseInt(btn.getAttribute('data-index'), 10);
+          if (action === 'up' && idx > 0) {
+            const temp = mergeFiles[idx - 1];
+            mergeFiles[idx - 1] = mergeFiles[idx];
+            mergeFiles[idx] = temp;
+            renderMergeList();
+          } else if (action === 'down' && idx < mergeFiles.length - 1) {
+            const temp = mergeFiles[idx + 1];
+            mergeFiles[idx + 1] = mergeFiles[idx];
+            mergeFiles[idx] = temp;
+            renderMergeList();
+          } else if (action === 'remove') {
+            mergeFiles.splice(idx, 1);
+            renderMergeList();
+          }
+        });
+      });
+    }
+
+    document.getElementById('inputMergeFiles').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        addFilesToMerge(Array.from(e.target.files));
+        e.target.value = '';
+      }
+    });
+
+    const dropzoneMerge = document.getElementById('dropzoneMerge');
+    dropzoneMerge.addEventListener('click', () => document.getElementById('inputMergeFiles').click());
+    dropzoneMerge.addEventListener('dragover', (e) => { e.preventDefault(); dropzoneMerge.classList.add('drop-zone-active'); });
+    dropzoneMerge.addEventListener('dragleave', () => dropzoneMerge.classList.remove('drop-zone-active'));
+    dropzoneMerge.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzoneMerge.classList.remove('drop-zone-active');
+      if (e.dataTransfer.files.length > 0) addFilesToMerge(Array.from(e.dataTransfer.files));
+    });
+
+    document.getElementById('btnClearMerge').addEventListener('click', () => {
+      mergeFiles = [];
+      renderMergeList();
+      showToast('已清空合併清單');
+    });
+
+    document.getElementById('btnExecuteMerge').addEventListener('click', async () => {
+      if (mergeFiles.length === 0) {
+        showToast('請先加入至少一個 PDF 檔案', 'error');
+        return;
+      }
+      try {
+        const mergedPdf = await PDFLib.PDFDocument.create();
+        let addedCount = 0;
+        for (const item of mergeFiles) {
+          const srcDoc = await PDFLib.PDFDocument.load(item.arrayBuffer, { ignoreEncryption: true });
+          const pageIndices = parsePageRanges(item.rangeStr, item.pageCount);
+          if (pageIndices.length > 0) {
+            const copiedPages = await mergedPdf.copyPages(srcDoc, pageIndices);
+            copiedPages.forEach(p => mergedPdf.addPage(p));
+            addedCount += copiedPages.length;
+          }
+        }
+        if (addedCount === 0) {
+          showToast('沒有任何有效頁面被選取，請檢查頁碼範圍設定', 'error');
+          return;
+        }
+        const pdfBytes = await mergedPdf.save();
+        const rawName = (document.getElementById('mergeOutputName').value || 'merged_document').trim().replace(/\.pdf$/i, '');
+        triggerDownload(new Blob([pdfBytes], { type: 'application/pdf' }), `${rawName}.pdf`);
+        showToast(`成功合併 ${addedCount} 頁並開始下載！`, 'success');
+      } catch (err) {
+        showToast('合併過程發生錯誤：' + err.message, 'error');
+      }
+    });
+
+    // ==================== TAB 2: SPLIT LOGIC ====================
+    async function loadFileForSplit(file) {
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        const pdfDoc = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: true });
+        const pageCount = pdfDoc.getPageCount();
+        const baseName = file.name.replace(/\.pdf$/i, '');
+
+        splitState.file = {
+          name: file.name,
+          size: file.size,
+          pageCount,
+          arrayBuffer: buffer
+        };
+        splitState.selectedPages = new Set(Array.from({ length: pageCount }, (_, i) => i + 1));
+        document.getElementById('splitOutputName').value = `${baseName}_split`;
+        document.getElementById('splitFileName').textContent = file.name;
+        document.getElementById('splitFileMeta').textContent = `共 ${pageCount} 頁 · ${formatBytes(file.size)}`;
+        document.getElementById('splitRangeInput').value = setToRangeString(splitState.selectedPages);
+
+        document.getElementById('dropzoneSplit').classList.add('hidden');
+        document.getElementById('splitWorkspace').classList.remove('hidden');
+
+        // Render thumbnails
+        splitState.thumbnails = await renderPdfThumbnails(buffer, 0.35);
+        renderSplitThumbnails();
+        showToast(`已載入「${file.name}」（共 ${pageCount} 頁）`, 'success');
+      } catch (err) {
+        showToast('無法解析該 PDF 檔案：' + err.message, 'error');
+      }
+    }
+
+    function renderSplitThumbnails() {
+      const grid = document.getElementById('splitThumbnailsGrid');
+      const badge = document.getElementById('splitSelectedCountBadge');
+      if (!splitState.file) return;
+
+      badge.textContent = `已選取 ${splitState.selectedPages.size} / ${splitState.file.pageCount} 頁`;
+      grid.innerHTML = '';
+
+      for (let p = 1; p <= splitState.file.pageCount; p++) {
+        const isSelected = splitState.selectedPages.has(p);
+        const card = document.createElement('div');
+        card.className = `page-card cursor-pointer rounded-xl border-2 p-2 flex flex-col items-center relative select-none ${
+          isSelected ? 'border-indigo-600 bg-indigo-50/40 shadow-sm' : 'border-slate-200 bg-white opacity-75 hover:opacity-100'
+        }`;
+
+        const thumbSrc = splitState.thumbnails[p - 1];
+        const previewHtml = thumbSrc
+          ? `<img src="${thumbSrc}" alt="第 ${p} 頁" class="w-full h-36 object-contain rounded bg-white border border-slate-100">`
+          : `<div class="w-full h-36 flex items-center justify-center bg-slate-100 rounded text-slate-400 text-xs font-medium">第 ${p} 頁</div>`;
+
+        card.innerHTML = `
+          <div class="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+            isSelected ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-300 text-transparent'
+          }">✓</div>
+          ${previewHtml}
+          <span class="mt-2 text-xs font-semibold ${isSelected ? 'text-indigo-700' : 'text-slate-600'}">第 ${p} 頁</span>
+        `;
+
+        card.addEventListener('click', () => {
+          if (splitState.selectedPages.has(p)) {
+            splitState.selectedPages.delete(p);
+          } else {
+            splitState.selectedPages.add(p);
+          }
+          document.getElementById('splitRangeInput').value = setToRangeString(splitState.selectedPages);
+          renderSplitThumbnails();
+        });
+        grid.appendChild(card);
+      }
+    }
+
+    document.getElementById('inputSplitFile').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        loadFileForSplit(e.target.files[0]);
+        e.target.value = '';
+      }
+    });
+
+    const dropzoneSplit = document.getElementById('dropzoneSplit');
+    dropzoneSplit.addEventListener('click', () => document.getElementById('inputSplitFile').click());
+    dropzoneSplit.addEventListener('dragover', (e) => { e.preventDefault(); dropzoneSplit.classList.add('drop-zone-active'); });
+    dropzoneSplit.addEventListener('dragleave', () => dropzoneSplit.classList.remove('drop-zone-active'));
+    dropzoneSplit.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzoneSplit.classList.remove('drop-zone-active');
+      if (e.dataTransfer.files.length > 0) loadFileForSplit(e.dataTransfer.files[0]);
+    });
+
+    document.querySelectorAll('input[name="splitMode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        const mode = e.target.value;
+        const rangeBox = document.getElementById('splitRangeInputBox');
+        const everyNBox = document.getElementById('splitEveryNBox');
+        if (mode === 'every_n') {
+          rangeBox.classList.add('hidden');
+          everyNBox.classList.remove('hidden');
+        } else {
+          rangeBox.classList.remove('hidden');
+          everyNBox.classList.add('hidden');
+        }
+      });
+    });
+
+    document.getElementById('splitRangeInput').addEventListener('input', (e) => {
+      if (!splitState.file) return;
+      const zeroIndices = parsePageRanges(e.target.value, splitState.file.pageCount);
+      splitState.selectedPages = new Set(zeroIndices.map(i => i + 1));
+      renderSplitThumbnails();
+    });
+
+    document.getElementById('btnSplitSelectAll').addEventListener('click', () => {
+      if (!splitState.file) return;
+      splitState.selectedPages = new Set(Array.from({ length: splitState.file.pageCount }, (_, i) => i + 1));
+      document.getElementById('splitRangeInput').value = setToRangeString(splitState.selectedPages);
+      renderSplitThumbnails();
+    });
+
+    document.getElementById('btnSplitSelectOdd').addEventListener('click', () => {
+      if (!splitState.file) return;
+      splitState.selectedPages = new Set();
+      for (let i = 1; i <= splitState.file.pageCount; i += 2) splitState.selectedPages.add(i);
+      document.getElementById('splitRangeInput').value = setToRangeString(splitState.selectedPages);
+      renderSplitThumbnails();
+    });
+
+    document.getElementById('btnSplitSelectEven').addEventListener('click', () => {
+      if (!splitState.file) return;
+      splitState.selectedPages = new Set();
+      for (let i = 2; i <= splitState.file.pageCount; i += 2) splitState.selectedPages.add(i);
+      document.getElementById('splitRangeInput').value = setToRangeString(splitState.selectedPages);
+      renderSplitThumbnails();
+    });
+
+    document.getElementById('btnSplitSelectNone').addEventListener('click', () => {
+      if (!splitState.file) return;
+      splitState.selectedPages.clear();
+      document.getElementById('splitRangeInput').value = '';
+      renderSplitThumbnails();
+    });
+
+    document.getElementById('btnExecuteSplit').addEventListener('click', async () => {
+      if (!splitState.file) {
+        showToast('請先上傳要拆解的 PDF 檔案', 'error');
+        return;
+      }
+      const mode = document.querySelector('input[name="splitMode"]:checked').value;
+      const prefix = (document.getElementById('splitOutputName').value || 'split_output').trim().replace(/\.pdf$/i, '');
+      const srcDoc = await PDFLib.PDFDocument.load(splitState.file.arrayBuffer, { ignoreEncryption: true });
+      const totalPages = splitState.file.pageCount;
+
+      try {
+        if (mode === 'extract_single') {
+          const indices = parsePageRanges(document.getElementById('splitRangeInput').value, totalPages);
+          if (indices.length === 0) {
+            showToast('請至少勾選或輸入一個有效頁碼', 'error');
+            return;
+          }
+          const outPdf = await PDFLib.PDFDocument.create();
+          const copied = await outPdf.copyPages(srcDoc, indices);
+          copied.forEach(p => outPdf.addPage(p));
+          const bytes = await outPdf.save();
+          triggerDownload(new Blob([bytes], { type: 'application/pdf' }), `${prefix}.pdf`);
+          showToast(`成功擷取 ${indices.length} 頁並下載！`, 'success');
+        } else if (mode === 'ranges_zip') {
+          const rawGroups = document.getElementById('splitRangeInput').value.split(',').map(s => s.trim()).filter(Boolean);
+          if (rawGroups.length === 0) {
+            showToast('請輸入要拆分的頁碼區間（以逗號分隔）', 'error');
+            return;
+          }
+          const zip = new JSZip();
+          let fileCount = 0;
+          for (const group of rawGroups) {
+            const indices = parsePageRanges(group, totalPages);
+            if (indices.length === 0) continue;
+            const subPdf = await PDFLib.PDFDocument.create();
+            const copied = await subPdf.copyPages(srcDoc, indices);
+            copied.forEach(p => subPdf.addPage(p));
+            const bytes = await subPdf.save();
+            const safeLabel = group.replace(/[^0-9\-]/g, '');
+            zip.file(`${prefix}_pages_${safeLabel || (fileCount + 1)}.pdf`, bytes);
+            fileCount++;
+          }
+          if (fileCount === 0) {
+            showToast('沒有產生任何有效區間檔案', 'error');
+            return;
+          }
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          triggerDownload(zipBlob, `${prefix}_split_files.zip`);
+          showToast(`已拆分為 ${fileCount} 個 PDF 並打包為 ZIP 下載！`, 'success');
+        } else if (mode === 'every_n') {
+          const step = Math.max(1, parseInt(document.getElementById('splitEveryNInput').value, 10) || 1);
+          const zip = new JSZip();
+          let partNum = 1;
+          for (let start = 0; start < totalPages; start += step) {
+            const end = Math.min(totalPages, start + step);
+            const indices = [];
+            for (let i = start; i < end; i++) indices.push(i);
+            const subPdf = await PDFLib.PDFDocument.create();
+            const copied = await subPdf.copyPages(srcDoc, indices);
+            copied.forEach(p => subPdf.addPage(p));
+            const bytes = await subPdf.save();
+            const label = start + 1 === end ? `p${start + 1}` : `p${start + 1}-${end}`;
+            zip.file(`${prefix}_${partNum}_${label}.pdf`, bytes);
+            partNum++;
+          }
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          triggerDownload(zipBlob, `${prefix}_every_${step}_pages.zip`);
+          showToast(`已依每 ${step} 頁拆分為 ${partNum - 1} 個檔案並打包下載！`, 'success');
+        }
+      } catch (err) {
+        showToast('拆解過程發生錯誤：' + err.message, 'error');
+      }
+    });
+
+    // ==================== TAB 3: ORGANIZE & ROTATE LOGIC ====================
+    async function addFilesToOrganize(fileList) {
+      let addedPages = 0;
+      for (const file of fileList) {
+        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') continue;
+        try {
+          const buffer = await file.arrayBuffer();
+          const pdfDoc = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: true });
+          const pageCount = pdfDoc.getPageCount();
+          const thumbs = await renderPdfThumbnails(buffer, 0.35);
+          for (let i = 0; i < pageCount; i++) {
+            organizePages.push({
+              uid: 'org_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '_' + i,
+              sourceName: file.name,
+              sourceBuffer: buffer,
+              pageIndex: i,
+              rotation: 0,
+              thumbUrl: thumbs[i] || null
+            });
+            addedPages++;
+          }
+        } catch (err) {
+          showToast(`載入 ${file.name} 失敗`, 'error');
+        }
+      }
+      if (addedPages > 0) {
+        renderOrganizeGrid();
+        showToast(`已加入 ${addedPages} 個頁面至重組工作區`, 'success');
+      }
+    }
+
+    function renderOrganizeGrid() {
+      const dropzone = document.getElementById('dropzoneOrganize');
+      const workspace = document.getElementById('organizeWorkspace');
+      const clearBtn = document.getElementById('btnClearOrganize');
+      const metaText = document.getElementById('organizeMetaText');
+      const grid = document.getElementById('organizeGrid');
+
+      if (organizePages.length === 0) {
+        dropzone.classList.remove('hidden');
+        workspace.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        return;
+      }
+
+      dropzone.classList.add('hidden');
+      workspace.classList.remove('hidden');
+      clearBtn.classList.remove('hidden');
+      metaText.textContent = `目前共 ${organizePages.length} 頁 · 可自由旋轉、前後移動、複製或刪除單一頁面`;
+
+      grid.innerHTML = '';
+      organizePages.forEach((p, idx) => {
+        const card = document.createElement('div');
+        card.className = 'page-card rounded-xl border border-slate-200 bg-white p-2.5 flex flex-col justify-between shadow-sm';
+        const thumbHtml = p.thumbUrl
+          ? `<img src="${p.thumbUrl}" alt="Page" style="transform: rotate(${p.rotation}deg);" class="w-full h-36 object-contain transition-transform duration-200">`
+          : `<div style="transform: rotate(${p.rotation}deg);" class="w-full h-36 bg-slate-100 flex items-center justify-center text-xs text-slate-500">原第 ${p.pageIndex + 1} 頁</div>`;
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
+              <span class="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">#${idx + 1}</span>
+              <span class="truncate max-w-[110px]" title="${p.sourceName}">${p.sourceName} (P.${p.pageIndex + 1})</span>
+            </div>
+            <div class="overflow-hidden rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center p-1">
+              ${thumbHtml}
+            </div>
+          </div>
+          <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+            <button type="button" data-act="left" data-idx="${idx}" class="px-1.5 py-1 text-xs rounded hover:bg-slate-100 text-slate-600 disabled:opacity-30" ${idx === 0 ? 'disabled' : ''} title="向前移">←</button>
+            <button type="button" data-act="right" data-idx="${idx}" class="px-1.5 py-1 text-xs rounded hover:bg-slate-100 text-slate-600 disabled:opacity-30" ${idx === organizePages.length - 1 ? 'disabled' : ''} title="向後移">→</button>
+            <button type="button" data-act="rotate" data-idx="${idx}" class="px-1.5 py-1 text-xs rounded hover:bg-indigo-50 text-indigo-600 font-medium" title="順時針旋轉 90°">↻ ${p.rotation}°</button>
+            <button type="button" data-act="dup" data-idx="${idx}" class="px-1.5 py-1 text-xs rounded hover:bg-slate-100 text-slate-600" title="複製此頁">⧉</button>
+            <button type="button" data-act="del" data-idx="${idx}" class="px-1.5 py-1 text-xs rounded hover:bg-red-50 text-red-600" title="刪除此頁">✕</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      grid.querySelectorAll('button[data-act]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const act = btn.getAttribute('data-act');
+          const idx = parseInt(btn.getAttribute('data-idx'), 10);
+          if (act === 'left' && idx > 0) {
+            const tmp = organizePages[idx - 1];
+            organizePages[idx - 1] = organizePages[idx];
+            organizePages[idx] = tmp;
+          } else if (act === 'right' && idx < organizePages.length - 1) {
+            const tmp = organizePages[idx + 1];
+            organizePages[idx + 1] = organizePages[idx];
+            organizePages[idx] = tmp;
+          } else if (act === 'rotate') {
+            organizePages[idx].rotation = (organizePages[idx].rotation + 90) % 360;
+          } else if (act === 'dup') {
+            const clone = { ...organizePages[idx], uid: 'org_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) };
+            organizePages.splice(idx + 1, 0, clone);
+          } else if (act === 'del') {
+            organizePages.splice(idx, 1);
+          }
+          renderOrganizeGrid();
+        });
+      });
+    }
+
+    document.getElementById('inputOrganizeFiles').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        addFilesToOrganize(Array.from(e.target.files));
+        e.target.value = '';
+      }
+    });
+
+    const dropzoneOrganize = document.getElementById('dropzoneOrganize');
+    dropzoneOrganize.addEventListener('click', () => document.getElementById('inputOrganizeFiles').click());
+    dropzoneOrganize.addEventListener('dragover', (e) => { e.preventDefault(); dropzoneOrganize.classList.add('drop-zone-active'); });
+    dropzoneOrganize.addEventListener('dragleave', () => dropzoneOrganize.classList.remove('drop-zone-active'));
+    dropzoneOrganize.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzoneOrganize.classList.remove('drop-zone-active');
+      if (e.dataTransfer.files.length > 0) addFilesToOrganize(Array.from(e.dataTransfer.files));
+    });
+
+    document.getElementById('btnClearOrganize').addEventListener('click', () => {
+      organizePages = [];
+      renderOrganizeGrid();
+      showToast('已清空所有重組頁面');
+    });
+
+    document.getElementById('btnRotateAllLeft').addEventListener('click', () => {
+      organizePages.forEach(p => { p.rotation = (p.rotation + 270) % 360; });
+      renderOrganizeGrid();
+    });
+
+    document.getElementById('btnRotateAllRight').addEventListener('click', () => {
+      organizePages.forEach(p => { p.rotation = (p.rotation + 90) % 360; });
+      renderOrganizeGrid();
+    });
+
+    document.getElementById('btnReverseOrder').addEventListener('click', () => {
+      organizePages.reverse();
+      renderOrganizeGrid();
+    });
+
+    document.getElementById('btnExecuteOrganize').addEventListener('click', async () => {
+      if (organizePages.length === 0) {
+        showToast('沒有可匯出的頁面', 'error');
+        return;
+      }
+      try {
+        const outPdf = await PDFLib.PDFDocument.create();
+        const loadedDocsCache = new Map();
+
+        for (const item of organizePages) {
+          let srcDoc = loadedDocsCache.get(item.sourceBuffer);
+          if (!srcDoc) {
+            srcDoc = await PDFLib.PDFDocument.load(item.sourceBuffer, { ignoreEncryption: true });
+            loadedDocsCache.set(item.sourceBuffer, srcDoc);
+          }
+          const [copiedPage] = await outPdf.copyPages(srcDoc, [item.pageIndex]);
+          if (item.rotation !== 0) {
+            const currentAngle = copiedPage.getRotation().angle;
+            copiedPage.setRotation(PDFLib.degrees((currentAngle + item.rotation) % 360));
+          }
+          outPdf.addPage(copiedPage);
+        }
+
+        const pdfBytes = await outPdf.save();
+        const rawName = (document.getElementById('organizeOutputName').value || 'organized_document').trim().replace(/\.pdf$/i, '');
+        triggerDownload(new Blob([pdfBytes], { type: 'application/pdf' }), `${rawName}.pdf`);
+        showToast(`成功匯出 ${organizePages.length} 頁重組後的 PDF！`, 'success');
+      } catch (err) {
+        showToast('匯出過程發生錯誤：' + err.message, 'error');
+      }
+    });
+
+    // ==================== BUILT-IN SAMPLE PDF GENERATOR ====================
+    async function createSamplePdfFile(titleText, pageCount, colorRgb) {
+      const pdfDoc = await PDFLib.PDFDocument.create();
+      const font = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+      const subFont = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+
+      for (let i = 1; i <= pageCount; i++) {
+        const page = pdfDoc.addPage([420, 595]); // A5 size
+        const { width, height } = page.getSize();
+
+        // Top banner
+        page.drawRectangle({
+          x: 0,
+          y: height - 90,
+          width,
+          height: 90,
+          color: PDFLib.rgb(colorRgb[0], colorRgb[1], colorRgb[2])
+        });
+
+        page.drawText(titleText, {
+          x: 32,
+          y: height - 55,
+          size: 22,
+          font,
+          color: PDFLib.rgb(1, 1, 1)
+        });
+
+        // Big Page Number Card
+        page.drawRectangle({
+          x: 32,
+          y: 120,
+          width: width - 64,
+          height: height - 250,
+          borderColor: PDFLib.rgb(0.85, 0.88, 0.92),
+          borderWidth: 2,
+          color: PDFLib.rgb(0.97, 0.98, 1)
+        });
+
+        page.drawText(`PAGE ${i} OF ${pageCount}`, {
+          x: 95,
+          y: height / 2 + 10,
+          size: 32,
+          font,
+          color: PDFLib.rgb(colorRgb[0], colorRgb[1], colorRgb[2])
+        });
+
+        page.drawText(`Sample Document for PDF Split & Merge Testing`, {
+          x: 65,
+          y: height / 2 - 35,
+          size: 13,
+          font: subFont,
+          color: PDFLib.rgb(0.4, 0.45, 0.52)
+        });
+      }
+
+      const bytes = await pdfDoc.save();
+      return new File([bytes], `${titleText.replace(/\s+/g, '_')}.pdf`, { type: 'application/pdf' });
+    }
+
+    document.getElementById('btnLoadSample').addEventListener('click', async () => {
+      try {
+        const sampleA = await createSamplePdfFile('Sample_Report_A', 4, [0.31, 0.27, 0.9]);
+        const sampleB = await createSamplePdfFile('Sample_Appendix_B', 3, [0.05, 0.58, 0.53]);
+
+        if (activeTab === 'merge') {
+          await addFilesToMerge([sampleA, sampleB]);
+        } else if (activeTab === 'split') {
+          await loadFileForSplit(sampleA);
+        } else if (activeTab === 'organize') {
+          await addFilesToOrganize([sampleA, sampleB]);
+        }
+      } catch (err) {
+        showToast('產生範例檔案失敗：' + err.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>
